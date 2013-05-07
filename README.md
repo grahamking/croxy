@@ -6,12 +6,14 @@ Croxy sits between your IRC client and the IRC server, encrypting (AES-256) and 
 
 **Install**
 
+There is no install, you just run the script.
+
 1. Get python3 (You probably have this already).
 
 2. Make sure you have pip for python3. On Ubuntu that's:
 
     `sudo apt-get install python3-setuptools`
-    
+
     `sudo easy_install3 pip`
 
 3. Install [pycrypto](https://pypi.python.org/pypi/pycrypto) 2.6+.
@@ -53,5 +55,19 @@ B. Every day, send the password in an encrypted, signed message to those people.
  * `gpg --encrypt --sign --armor -r friend1 -r friend2 password.txt`
 
 C. Start Croxy!
+
+## Smallprint
+
+### Vulerability to traffic analysis
+
+Croxy protects **what you say, not who you say it too**. In other worlds people watching will be able to see who you are talking to, and when, but not what you are saying. If this concerns you, you should connect to the IRC server using [Tor](https://www.torproject.org/). It also makes sense to use a nick different than your usual one.
+
+### Ensuring forward secrecy
+
+You should change the password every day, so that if the password is compromised you lose a single day of logs. Ideally someone from your channel should send the new password (GnuPG encrypted and signed) to all participants, each morning.
+
+### License
+
+Croxy is free software, GPL licensed. See LICENSE.txt for details.
 
 Happy safe chat!
