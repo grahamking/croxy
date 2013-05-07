@@ -4,25 +4,9 @@ Croxy sits between your IRC client and the IRC server, encrypting (AES-256) and 
 
 ## Install
 
-**Install**
+**There is no install, you just run the script.** You must have [Python](http://www.python.org/download/releases/) v3.2+ (you probably already do).
 
-There is no install, you just run the script.
-
-1. Get python3 (You probably have this already).
-
-2. Make sure you have pip for python3. On Ubuntu that's:
-
-    `sudo apt-get install python3-setuptools`
-
-    `sudo easy_install3 pip`
-
-3. Install [pycrypto](https://pypi.python.org/pypi/pycrypto) 2.6+.
-
-    `sudo pip-3.2 install pycrypto`
-
-4. Clone this repository (or just download [croxy.py](https://raw.github.com/grahamking/croxy/master/croxy.py)):
-
-    `git clone git://github.com/grahamking/croxy.git`
+Download [croxy.py](https://raw.github.com/grahamking/croxy/master/croxy.py)).
 
 ## Run
 
@@ -66,8 +50,27 @@ Croxy protects **what you say, not who you say it too**. In other worlds people 
 
 You should change the password every day, so that if the password is compromised you lose a single day of logs. Ideally someone from your channel should send the new password (GnuPG encrypted and signed) to all participants, each morning.
 
+### Can I trust the crypto?
+
+Honestly, I can't say, but here's some things that might make you feel safer:
+
+- The AES / Rijndael implementation (which does the actual cryptography) comes from [tlslite](https://github.com/trevp/tlslite/). It is used by both Google for it's official [GData Python API](http://code.google.com/p/gdata-python-client/) and by [Opera](https://github.com/operasoftware/tlslite).
+
+- The PBKDF2 implementation is from Django.
+
+- If you install [pycrypto](https://pypi.python.org/pypi/pycrypto) 2.6+ (`sudo pip-3.2 install pycrypto`) croxy will detect and use that automatically for both AES and PBKDF2. The built-in AES/PBKDF2 implementations are compatible with pycrypto.
+
 ### License
 
-Croxy is free software, GPL licensed. See LICENSE.txt for details.
+Croxy is free software. It includes code from different sources. All code is either dedicated to the public domain by its authors, or available under a BSD-style license. In particular:
+
+Code written by Trevor Perrin (AES) is free and unencumbered software released into the public domain.
+
+Code written by Bram Cohen (rijndael) was dedicated to the public domain by
+its author.
+
+Code from Django Software Federation (pbkdf2) is BSD licensed.
+
+All other code in Croxy is (c) 2013 Graham King, released into the public domain.
 
 Happy safe chat!
