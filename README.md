@@ -6,7 +6,7 @@ Croxy sits between your IRC client and the IRC server, encrypting (AES-256) and 
 
 **There is no install, you just run the script.** You must have [Python](http://www.python.org/download/releases/) v3.2+ (you probably already do).
 
-Download [croxy.py](https://raw.github.com/grahamking/croxy/master/croxy.py)).
+Download [croxy.py](https://raw.github.com/grahamking/croxy/master/croxy.py).
 
 ## Run
 
