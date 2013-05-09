@@ -26,8 +26,9 @@ import socket
 import threading
 import base64
 import binascii
+import ssl
 
-USAGE = "Usage: croxy <irc.example.net> [port]\nDefault port is 6667"
+USAGE = "Usage: croxy <irc.example.net> [port]\nDefault port is 6697"
 LISTEN_PORT = 6667
 HARD_CODED_STR_SALT = b"CROXYSALT"
 
@@ -39,7 +40,7 @@ def main():
 
     host = sys.argv[1]
 
-    port = 6667
+    port = 6697
     if len(sys.argv) == 3:
         port = sys.argv[2]
 
@@ -74,10 +75,13 @@ class ClientHandler(socketserver.StreamRequestHandler):
 
     def __init__(self, request, addr, server):
         """server: Instance of ClientServer."""
+        self.server = server
+
         self.host = server.host
         self.port = server.port
         self.password = server.password
         self.local_f = None
+
         super().__init__(request, addr, server)
 
     def handle(self):
@@ -87,6 +91,10 @@ class ClientHandler(socketserver.StreamRequestHandler):
         self.local_f = self.wfile
 
         remote_f = self.connect_remote()
+        if not remote_f:
+            # Error connecting to IRC. Abort.
+            self.server.server_close()
+            return
 
         while 1:
             line = str(self.rfile.readline(), 'utf8')
@@ -114,6 +122,11 @@ class ClientHandler(socketserver.StreamRequestHandler):
             self.port,
             self.password,
             self.local_f)
+
+        if not remote.remote_conn:
+            # Connect failed
+            return None
+
         remote.start()
         return remote.remote_f
 
@@ -148,7 +161,27 @@ class ServerWorker(threading.Thread):
         self.password = password
         self.local_f = local_f
 
-        self.remote_conn = socket.create_connection((host, port))
+        sock = socket.create_connection((host, port))
+        try:
+            ssock = ssl.wrap_socket(sock, ssl_version=ssl.PROTOCOL_TLSv1)
+            msg = ("TLS socket connection established. {openssl}\n"
+                  "Cipher: {cipher}\n"
+                  "Server certificate (not checked):\n{cert}\n")
+            print(msg.format(
+                openssl=ssl.OPENSSL_VERSION,
+                cipher=ssock.cipher(),
+                cert=ssock.getpeercert()
+            ))
+
+            self.remote_conn = ssock
+
+        except ssl.SSLError as exc:
+            print("SSLError: {}".format(exc))
+            print("Could not establish TLS/SSL connection. Are you sure "
+                  "port {} supports TLSv1?".format(port))
+            self.remote_conn = None     # Stops the program
+            return
+
         self.remote_f = self.remote_conn.makefile(mode='rw', encoding='utf8')
 
     def run(self):

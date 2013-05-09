@@ -14,7 +14,7 @@ Just run the script, giving the address of the IRC server you want to connect to
 
     python3 croxy.py irc.freenode.net
 
-For other networks substitute `irc.freenode.net`.
+For other networks substitute `irc.freenode.net`. The default port used is 6697, which is the [default IRC SSL port](http://blog.freenode.net/2011/02/port-6697-irc-via-tlsssl/). To use a different port (must support TLS/SSL) add to the end of the line like this: `python3 croxy.py irc.example.com 7778`. Croxy will only connect over TLS/SSL, not over plaintext.
 
 It will ask you for the password to use for encryption. Everyone in the channel will need to use the same password to communicate.
 
