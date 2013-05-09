@@ -129,14 +129,6 @@ class ClientHandler(socketserver.StreamRequestHandler):
         body = ':'.join(parts[1:])
         return prefix, body
 
-    '''
-    def encrypt(self, msg):
-        """AES-256 encrypt a message, returning it as ascii (base64)."""
-
-        cipher = _cipher(self.password)
-        sec = cipher.encrypt(mpad(msg, 32))
-        return str(base64.b64encode(sec), "ascii")
-    '''
 
 class ServerWorker(threading.Thread):
     """Connect to the real IRC server."""
@@ -211,29 +203,6 @@ class ServerWorker(threading.Thread):
 
         return prefix, command, args
 
-    '''
-    def decrypt(self, msg):
-        """AES-256 decrypt a message"""
-        if isinstance(msg, str):
-            msg = bytes(msg, 'ascii')
-
-        try:
-            sec = base64.b64decode(msg)
-        except binascii.Error:
-            raise NotEncrypted()
-
-        derived = croxy_pbkdf2(self.password)
-        thing = b'This is an IV456'
-        cipher = Python_AES(derived, 2, thing)
-        sec = bytearray(sec)
-
-        try:
-            clear = str(cipher.decrypt(sec), "utf8")
-        except ValueError:
-            raise NotEncrypted()
-
-        return clear.strip('\0')
-    '''
 
 def mpad(msg, size):
     """Pad a str to multiple of size bytes. """
