@@ -97,7 +97,8 @@ class ClientHandler(socketserver.StreamRequestHandler):
             return
 
         while 1:
-            line = str(self.rfile.readline(), 'utf8')
+            line_bytes = self.rfile.readline()
+            line = decode(line_bytes)
             if not line:
                 print("EOF")
                 break
@@ -237,6 +238,14 @@ class ServerWorker(threading.Thread):
         return prefix, command, args
 
 
+def decode(line):
+    """Takes bytes and returns unicode. Tries utf8 and iso-8859-1."""
+
+    try:
+        return str(line, 'utf8')
+    except UnicodeDecodeError:
+        return str(line, 'iso-8859-1')
+
 def mpad(msg, size):
     """Pad a str to multiple of size bytes. """
     amount = size - len(msg) % size
@@ -295,7 +304,7 @@ def croxy_decrypt(msg, key):
 
     try:
         clear = str(cipher.decrypt(sec), "utf8")
-    except ValueError:
+    except (ValueError, AssertionError):
         raise NotEncrypted()
 
     return clear.strip('\0')
