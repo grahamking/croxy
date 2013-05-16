@@ -105,15 +105,13 @@ class ClientHandler(socketserver.StreamRequestHandler):
 
             if line.startswith("PRIVMSG"):
                 prefix, body = self.parse_out(line)
-                line = (prefix +
-                       ":" +
-                       croxy_encrypt(body, self.password) +
-                       "\r\n")
+                ciphertext = croxy_encrypt(body, self.password)
+                line = (prefix + ":" + ciphertext + "\r\n")
 
             print("> ", line.strip())
 
             if remote_f:
-                remote_f.write(line)
+                remote_f.write(line.encode('utf8'))
                 remote_f.flush()
 
     def connect_remote(self):
@@ -140,7 +138,7 @@ class ClientHandler(socketserver.StreamRequestHandler):
 
         parts = line.strip().split(":")
         prefix = parts[0]
-        body = ':'.join(parts[1:])
+        body = ":".join(parts[1:])
         return prefix, body
 
 
@@ -183,13 +181,16 @@ class ServerWorker(threading.Thread):
             self.remote_conn = None     # Stops the program
             return
 
-        self.remote_f = self.remote_conn.makefile(mode='rw', encoding='utf8')
+        #self.remote_f = self.remote_conn.makefile(mode='rw', encoding='utf8')
+        # Set socket file to binary, handle encoding ourselves
+        self.remote_f = self.remote_conn.makefile(mode='rwb')
+
 
     def run(self):
         """Thread main method."""
 
         while 1:
-            line = self.remote_f.readline()
+            line = decode(self.remote_f.readline())
             if not line:
                 print("SERVER EOF")
                 break
@@ -210,7 +211,7 @@ class ServerWorker(threading.Thread):
                 line = start + body + "\r\n"
 
             try:
-                self.local_f.write(bytes(line, 'utf8'))
+                self.local_f.write(line.encode('utf8'))
                 self.local_f.flush()
             except ValueError:
                 print("CLIENT EOF")
@@ -245,14 +246,19 @@ def decode(line):
         return str(line, 'utf8')
     except UnicodeDecodeError:
         return str(line, 'iso-8859-1')
+    except TypeError:
+        # Already unicode
+        return line
 
 def mpad(msg, size):
     """Pad a str to multiple of size bytes. """
     amount = size - len(msg) % size
-    return msg + '\0' * amount
+    return msg + b'\0' * amount
+
 
 class NotEncrypted(Exception):
     """Is not an encrypted message"""
+
 
 ## CRYPTO LIBRARY WRAPPERS
 # This is our only entry points to the next section.
@@ -261,6 +267,7 @@ def croxy_encrypt(msg, key):
     """AES-256 encrypt the msg (str) with key (str).
     Returns base64 encoded (str).
     """
+    msg = msg.encode('utf8')
     msg = mpad(msg, 32)
     derived = croxy_pbkdf2(key)
     thing = b'This is an IV456'
@@ -272,10 +279,10 @@ def croxy_encrypt(msg, key):
     except ImportError:
         # Use our own from tlslite (inline below)
         cipher = Python_AES(derived, 2, thing)
-        msg = bytearray(msg, "utf8")
+        msg = bytearray(msg)
 
     sec = cipher.encrypt(msg)
-    return str(base64.b64encode(sec), "ascii")
+    return str(base64.b64encode(sec), 'ascii')
 
 def croxy_decrypt(msg, key):
     """AES-256 decrypt the msg (str) with key (str).
@@ -283,7 +290,11 @@ def croxy_decrypt(msg, key):
     """
 
     if isinstance(msg, str):
-        msg = bytes(msg, 'ascii')
+        try:
+            msg = msg.encode('ascii')
+        except UnicodeEncodeError:
+            # If it's not ascii, then it's not base64, so not encrypted
+            raise NotEncrypted()
 
     try:
         sec = base64.b64decode(msg)
@@ -314,7 +325,7 @@ def croxy_pbkdf2(key):
 
     iterations = 1000
     salt = HARD_CODED_STR_SALT
-    bkey = bytes(key, "utf8")
+    bkey = key.encode("utf8")
     dklen = 32
 
     try:
