@@ -73,4 +73,15 @@ Code from Django Software Federation (pbkdf2) is BSD licensed.
 
 All other code in Croxy is (c) 2013 Graham King, released into the public domain.
 
+### Testing
+
+To run the unit tests:
+
+    python3 test.py
+
+For code coverage (first `pip-3.2 install coverage`):
+
+    coverage3 run test.py
+    coverage3 report --include=croxy.py --show-missing
+
 Happy safe chat!

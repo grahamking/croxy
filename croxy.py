@@ -251,7 +251,7 @@ def decode(line):
         return line
 
 def mpad(msg, size):
-    """Pad a str to multiple of size bytes. """
+    """Pad a byte string to multiple of size bytes. """
     amount = size - len(msg) % size
     return msg + b'\0' * amount
 
@@ -895,8 +895,8 @@ def decrypt(key, block):
 
 def test():
     def t(kl, bl):
-        b = 'b' * bl
-        r = rijndael('a' * kl, bl)
+        b = b'b' * bl
+        r = rijndael(b'a' * kl, bl)
         assert r.decrypt(r.encrypt(b)) == b
     t(16, 16)
     t(16, 24)
