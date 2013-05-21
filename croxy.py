@@ -43,9 +43,7 @@ def main(args):
         return 1
 
     host, port = parse_args(args)
-
     password = getpass.getpass("Today's password: ")
-
     print("Now point your IRC client at: localhost:{}".format(LISTEN_PORT))
 
     local = ClientServer(('localhost', LISTEN_PORT),
@@ -81,6 +79,7 @@ class ClientServer(socketserver.TCPServer):
         self.port = port
         self.password = password
 
+
 class ClientHandler(socketserver.StreamRequestHandler):
     """Handles connection from user's IRC client"""
 
@@ -114,16 +113,7 @@ class ClientHandler(socketserver.StreamRequestHandler):
                 print("EOF")
                 break
 
-            if line.startswith("PRIVMSG"):
-                prefix, body = parse_out(line)
-                ciphertext = croxy_encrypt(body, self.password)
-                line = (prefix + ":" + ciphertext + "\r\n")
-
-            print("> ", line.strip())
-
-            if remote_f:
-                remote_f.write(line.encode('utf8'))
-                remote_f.flush()
+            handle_client_line(line, self.password, remote_f)
 
     def connect_remote(self):
         """Connect to IRC server"""
@@ -139,6 +129,25 @@ class ClientHandler(socketserver.StreamRequestHandler):
 
         remote.start()
         return remote.remote_f
+
+
+def handle_client_line(line, password, remote_f):
+    """Handle a single line from the client.
+    line: str
+    remote_f: file
+    """
+
+    if line.startswith("PRIVMSG"):
+        prefix, body = parse_out(line)
+        ciphertext = croxy_encrypt(body, password)
+        line = (prefix + ":" + ciphertext + "\r\n")
+
+    print("> ", line.strip())
+
+    if remote_f:
+        as_bytes = line.encode('utf8')
+        remote_f.write(as_bytes)
+        remote_f.flush()
 
 
 class ServerWorker(threading.Thread):
@@ -180,10 +189,8 @@ class ServerWorker(threading.Thread):
             self.remote_conn = None     # Stops the program
             return
 
-        #self.remote_f = self.remote_conn.makefile(mode='rw', encoding='utf8')
         # Set socket file to binary, handle encoding ourselves
         self.remote_f = self.remote_conn.makefile(mode='rwb')
-
 
     def run(self):
         """Thread main method."""
@@ -194,30 +201,39 @@ class ServerWorker(threading.Thread):
                 print("SERVER EOF")
                 break
 
-            print("< ", line.strip())
-
-            prefix, command, args = parse_in(line)
-
-            if command == "PRIVMSG":
-                start = ":" + prefix + " " + command + " " + args[0] + " :"
-                body = args[1]      # This is the message
-
-                try:
-                    body = croxy_decrypt(body, self.password)
-                except NotEncrypted:
-                    body = "(I) " + body
-
-                line = start + body + "\r\n"
-
             try:
-                self.local_f.write(line.encode('utf8'))
-                self.local_f.flush()
-            except ValueError:
+                handle_server_line(line, self.password, self.local_f)
+            except CloseException:
                 print("CLIENT EOF")
                 break
 
         self.remote_conn.close()
 
+
+def handle_server_line(line, password, local_f):
+    """Handle a single IRC line from the server.
+    """
+
+    print("< ", line.strip())
+
+    prefix, command, args = parse_in(line)
+
+    if command == "PRIVMSG":
+        start = ":" + prefix + " " + command + " " + args[0] + " :"
+        body = args[1]      # This is the message
+
+        try:
+            body = croxy_decrypt(body, password)
+        except NotEncrypted:
+            body = "(I) " + body
+
+        line = start + body + "\r\n"
+
+    try:
+        local_f.write(line.encode('utf8'))
+        local_f.flush()
+    except ValueError:
+        raise CloseException()
 
 def decode(line):
     """Takes bytes and returns unicode. Tries utf8 and iso-8859-1."""
@@ -269,6 +285,9 @@ def parse_in(line):
 
 class NotEncrypted(Exception):
     """Is not an encrypted message"""
+
+class CloseException(Exception):
+    """Client or server closed connection"""
 
 
 ## CRYPTO LIBRARY WRAPPERS

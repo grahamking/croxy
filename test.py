@@ -19,6 +19,46 @@ class TestClientServer(unittest.TestCase):
         self.assertTrue(cs)
         cs.socket.close()
 
+    def test_handle_client_line(self):
+
+        old = suppress_stdout()
+
+        msg = "This is a test"
+        line = "PRIVMSG #test :" + msg
+        password = "secret"
+        remote_f = io.BytesIO()
+        croxy.handle_client_line(line, password, remote_f)
+
+        output = remote_f.getvalue()
+        ciphertext = output.decode('utf8').split(":")[1]
+        clear = croxy.croxy_decrypt(ciphertext, password)
+        self.assertEqual(clear, msg)
+
+        restore_stdout(old)
+
+
+class TestServerWorker(unittest.TestCase):
+    """Test the ServerWorker class which is a thread.
+    """
+
+    def test_handle_server_line(self):
+
+        old = suppress_stdout()
+
+        msg = "Test"
+        password = "secret"
+        ciphertext = croxy.croxy_encrypt(msg, password)
+        line = ":gk3!~gk3@example.net PRIVMSG #secure :" + ciphertext
+
+        local_f = io.BytesIO()
+        croxy.handle_server_line(line, password, local_f)
+
+        output = local_f.getvalue()
+        clear = output.decode('utf8').split(":")[2].strip()
+        self.assertEqual(clear, msg)
+
+        restore_stdout(old)
+
 
 class TestUtil(unittest.TestCase):
     """Test various utility functions.
@@ -50,11 +90,13 @@ class TestUtil(unittest.TestCase):
         self.assertEqual(croxy.decode(l1.encode("latin-1")), l1)
 
     def test_main_no_args(self):
-        buf = io.StringIO()
-        sys.stdout = buf
+        old_stdout = sys.stdout
+        sys.stdout = buf = io.StringIO()
 
         self.assertEqual(croxy.main([]), 1)
         self.assertTrue(len(buf.getvalue()) > 0)
+
+        restore_stdout(old_stdout)
 
     def test_parse_args_default_port(self):
 
@@ -161,32 +203,16 @@ class TestCrypto(unittest.TestCase):
         """
         croxy.test()
 
-'''
-class TestClientHandler(unittest.TestCase):
-    """Test the ClientHandler class which
-    extends socketserver.StreamRequestHandler.
-    """
 
-    def test_init(self):
+def suppress_stdout():
+    """Turn off write to screen, for pretty test output."""
+    old_stdout = sys.stdout
+    sys.stdout = io.StringIO()
+    return old_stdout
 
-        addr = ("127.0.0.1", 6667)
-        cs = croxy.ClientServer(addr, None, 'localhost', 6697, 's3cret')
-
-        h = croxy.ClientHandler(MockRequest(), addr, cs)
-        self.assertTrue(h)
-
-class MockRequest():
-
-    """Just enough of socket connection.
-    """
-    def makefile(self, mode, *args, **kwargs):
-        print(mode)
-        return open("test.txt", "ab")
-
-    def __init__(self):
-        pass
-'''
-
+def restore_stdout(old_stdout):
+    """Turn stdout back on."""
+    sys.stdout = old_stdout
 
 if __name__ == '__main__':
     unittest.main()
