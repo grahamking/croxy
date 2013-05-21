@@ -27,22 +27,22 @@ import threading
 import base64
 import binascii
 import ssl
+import os
 
 USAGE = "Usage: croxy <irc.example.net> [port]\nDefault port is 6697"
 LISTEN_PORT = 6667
-HARD_CODED_STR_SALT = b"CROXYSALT"
+REMOTE_PORT = 6697  # Default IRC over TLS port
 
-def main():
+DEFAULT_SALT = b"CROXYSALT IS A LOW SODIUM SALT"    # For pbkdf2 only
+PBKDF2_ITERATIONS = 5000
 
-    if len(sys.argv) < 2:
+def main(args):
+
+    if len(args) < 1:
         print(USAGE)
         return 1
 
-    host = sys.argv[1]
-
-    port = 6697
-    if len(sys.argv) == 3:
-        port = sys.argv[2]
+    host, port = parse_args(args)
 
     password = getpass.getpass("Today's password: ")
 
@@ -60,6 +60,17 @@ def main():
         print("Bye")
 
     return 0
+
+def parse_args(args):
+    """Takes sys.argv returns tuple (host, port)"""
+    host = args[0]
+
+    port = REMOTE_PORT
+    if len(args) == 2:
+        port = args[1]
+
+    return host, port
+
 
 class ClientServer(socketserver.TCPServer):
     allow_reuse_address = True
@@ -104,7 +115,7 @@ class ClientHandler(socketserver.StreamRequestHandler):
                 break
 
             if line.startswith("PRIVMSG"):
-                prefix, body = self.parse_out(line)
+                prefix, body = parse_out(line)
                 ciphertext = croxy_encrypt(body, self.password)
                 line = (prefix + ":" + ciphertext + "\r\n")
 
@@ -128,18 +139,6 @@ class ClientHandler(socketserver.StreamRequestHandler):
 
         remote.start()
         return remote.remote_f
-
-    def parse_out(self, line):
-        """Parses an outoing IRC message into prefix and body.
-        e.g: "PRIVMSG #test :testing" ->
-                prefix="PRIVMSG #test ", body="testing"
-        Outgoing messages are simpler in format than incoming messages.
-        """
-
-        parts = line.strip().split(":")
-        prefix = parts[0]
-        body = ":".join(parts[1:])
-        return prefix, body
 
 
 class ServerWorker(threading.Thread):
@@ -197,7 +196,7 @@ class ServerWorker(threading.Thread):
 
             print("< ", line.strip())
 
-            prefix, command, args = self.parse_in(line)
+            prefix, command, args = parse_in(line)
 
             if command == "PRIVMSG":
                 start = ":" + prefix + " " + command + " " + args[0] + " :"
@@ -219,25 +218,6 @@ class ServerWorker(threading.Thread):
 
         self.remote_conn.close()
 
-    def parse_in(self, line):
-        """Parse an incoming IRC message."""
-        prefix = ''
-        trailing = []
-        if not line:
-            print("Bad IRC message: ", line)
-            return None
-        if line[0] == ':':
-            prefix, line = line[1:].split(' ', 1)
-        if line.find(' :') != -1:
-            line, trailing = line.split(' :', 1)
-            args = line.split()
-            args.append(trailing)
-        else:
-            args = line.split()
-        command = args.pop(0)
-
-        return prefix, command, args
-
 
 def decode(line):
     """Takes bytes and returns unicode. Tries utf8 and iso-8859-1."""
@@ -255,6 +235,37 @@ def mpad(msg, size):
     amount = size - len(msg) % size
     return msg + b'\0' * amount
 
+def parse_out(line):
+    """Parses an outoing IRC message into prefix and body.
+    e.g: "PRIVMSG #test :testing" ->
+            prefix="PRIVMSG #test ", body="testing"
+    Outgoing messages are simpler in format than incoming messages.
+    """
+
+    parts = line.strip().split(":")
+    prefix = parts[0]
+    body = ":".join(parts[1:])
+    return prefix, body
+
+def parse_in(line):
+    """Parse an incoming IRC message."""
+    prefix = ''
+    trailing = []
+    if not line:
+        print("Bad IRC message: ", line)
+        return None
+    if line[0] == ':':
+        prefix, line = line[1:].split(' ', 1)
+    if line.find(' :') != -1:
+        line, trailing = line.split(' :', 1)
+        args = line.split()
+        args.append(trailing)
+    else:
+        args = line.split()
+    command = args.pop(0)
+
+    return prefix, command, args
+
 
 class NotEncrypted(Exception):
     """Is not an encrypted message"""
@@ -270,19 +281,19 @@ def croxy_encrypt(msg, key):
     msg = msg.encode('utf8')
     msg = mpad(msg, 32)
     derived = croxy_pbkdf2(key)
-    thing = b'This is an IV456'
+    iv = os.urandom(16)
 
     try:
         # If pycrypto is present use it
         from Crypto.Cipher import AES
-        cipher = AES.new(derived, AES.MODE_CBC, thing)
+        cipher = AES.new(derived, AES.MODE_CBC, iv)
     except ImportError:
         # Use our own from tlslite (inline below)
-        cipher = Python_AES(derived, 2, thing)
+        cipher = Python_AES(derived, 2, iv)
         msg = bytearray(msg)
 
     sec = cipher.encrypt(msg)
-    return str(base64.b64encode(sec), 'ascii')
+    return str(base64.b64encode(iv + sec), 'ascii')
 
 def croxy_decrypt(msg, key):
     """AES-256 decrypt the msg (str) with key (str).
@@ -302,15 +313,16 @@ def croxy_decrypt(msg, key):
         raise NotEncrypted()
 
     derived = croxy_pbkdf2(key)
-    thing = b'This is an IV456'
+    iv = sec[:16]
+    sec = sec[16:]
 
     try:
         # If pycrypto is present use it
         from Crypto.Cipher import AES
-        cipher = AES.new(derived, AES.MODE_CBC, thing)
+        cipher = AES.new(derived, AES.MODE_CBC, iv)
     except ImportError:
         # Use our own from tlslite (inline below)
-        cipher = Python_AES(derived, 2, thing)
+        cipher = Python_AES(derived, 2, iv)
         sec = bytearray(sec)
 
     try:
@@ -320,21 +332,14 @@ def croxy_decrypt(msg, key):
 
     return clear.strip('\0')
 
-def croxy_pbkdf2(key):
+def croxy_pbkdf2(key, iterations=PBKDF2_ITERATIONS, salt=DEFAULT_SALT):
     """32-bit PBKDF2 derived from 'key'"""
 
-    iterations = 1000
-    salt = HARD_CODED_STR_SALT
     bkey = key.encode("utf8")
     dklen = 32
 
-    try:
-        # If pycrypto is present use it
-        from Crypto.Protocol.KDF import PBKDF2
-        derived = PBKDF2(bkey, salt, count=iterations, dkLen=dklen)
-    except ImportError:
-        # Use our own from Django (inline below)
-        derived = pbkdf2(bkey, salt, iterations, dklen=dklen)
+    # Use our own from Django (inline below)
+    derived = pbkdf2(bkey, salt, iterations, dklen=dklen)
 
     return derived
 
@@ -887,12 +892,6 @@ class rijndael:
             result.append((Si[ t[(i + s3) % BC]        & 0xFF] ^  tt       ) & 0xFF)
         return bytearray(result)
 
-def encrypt(key, block):
-    return rijndael(key, len(block)).encrypt(block)
-
-def decrypt(key, block):
-    return rijndael(key, len(block)).decrypt(block)
-
 def test():
     def t(kl, bl):
         b = b'b' * bl
@@ -911,4 +910,4 @@ def test():
 # -- End rijndael.py
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))

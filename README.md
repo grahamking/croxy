@@ -58,7 +58,7 @@ Honestly, I can't say, but here's some things that might make you feel safer:
 
 - The PBKDF2 implementation is from Django.
 
-- If you install [pycrypto](https://pypi.python.org/pypi/pycrypto) 2.6+ (`sudo pip-3.2 install pycrypto`) croxy will detect and use that automatically for both AES and PBKDF2. The built-in AES/PBKDF2 implementations are compatible with pycrypto.
+- If you install [pycrypto](https://pypi.python.org/pypi/pycrypto) 2.6+ (`sudo pip-3.2 install pycrypto`) croxy will detect and use that automatically for AES. The built-in AES implementation is compatible with pycrypto.
 
 ### License
 

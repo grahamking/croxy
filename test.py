@@ -4,6 +4,8 @@ Usage: python3 test.py
 """
 
 import unittest
+import io
+import sys
 
 import croxy
 
@@ -17,31 +19,6 @@ class TestClientServer(unittest.TestCase):
         self.assertTrue(cs)
         cs.socket.close()
 
-'''
-class TestClientHandler(unittest.TestCase):
-    """Test the ClientHandler class which
-    extends socketserver.StreamRequestHandler.
-    """
-
-    def test_init(self):
-
-        addr = ("127.0.0.1", 6667)
-        cs = croxy.ClientServer(addr, None, 'localhost', 6697, 's3cret')
-
-        h = croxy.ClientHandler(MockRequest(), addr, cs)
-        self.assertTrue(h)
-
-class MockRequest():
-
-    """Just enough of socket connection.
-    """
-    def makefile(self, mode, *args, **kwargs):
-        print(mode)
-        return open("test.txt", "ab")
-
-    def __init__(self):
-        pass
-'''
 
 class TestUtil(unittest.TestCase):
     """Test various utility functions.
@@ -72,6 +49,67 @@ class TestUtil(unittest.TestCase):
         l1 = "On s'était dit..."
         self.assertEqual(croxy.decode(l1.encode("latin-1")), l1)
 
+    def test_main_no_args(self):
+        buf = io.StringIO()
+        sys.stdout = buf
+
+        self.assertEqual(croxy.main([]), 1)
+        self.assertTrue(len(buf.getvalue()) > 0)
+
+    def test_parse_args_default_port(self):
+
+        h1, p1 = croxy.parse_args(["localhost"])
+        self.assertEqual(h1, "localhost")
+        self.assertEqual(p1, 6697)
+
+    def test_parse_args(self):
+        h2, p2 = croxy.parse_args(["localhost", 7000])
+        self.assertEqual(h2, "localhost")
+        self.assertEqual(p2, 7000)
+
+
+class TestParse(unittest.TestCase):
+    """Test parsing lines."""
+
+    def test_parse_out(self):
+        prefix, body = croxy.parse_out("PRIVMSG #test :bob: How's it going?")
+        self.assertEqual(prefix, "PRIVMSG #test ")
+        self.assertEqual(body, "bob: How's it going?")
+
+    def test_parse_in_welcome(self):
+        line = ":barjavel.freenode.net 001 graham_king :Welcome to the freenode Internet Relay Chat Network graham_king"
+        prefix, command, args = croxy.parse_in(line)
+        self.assertEqual(prefix, "barjavel.freenode.net")
+        self.assertEqual(command, "001")
+        self.assertEqual(args, ["graham_king", "Welcome to the freenode Internet Relay Chat Network graham_king"])
+
+    def test_parse_in_privmsg(self):
+        line = ":rnowak!~rnowak@q.ovron.com PRIVMSG #linode :totally"
+        prefix, command, args = croxy.parse_in(line)
+        self.assertEqual(prefix, "rnowak!~rnowak@q.ovron.com")
+        self.assertEqual(command, "PRIVMSG")
+        self.assertEqual(args, ["#linode", "totally"])
+
+    def test_parse_in_andbang(self):
+        line = ":alan!223@irc.andbang.com PRIVMSG #ab :hello @graham"
+        prefix, command, args = croxy.parse_in(line)
+        self.assertEqual(prefix, "alan!223@irc.andbang.com")
+        self.assertEqual(command, "PRIVMSG")
+        self.assertEqual(args, ["#ab", "hello @graham"])
+
+    def test_parse_in_away(self):
+        line = ":hybrid7.debian.local 301 graham_king graham :Not here"
+        prefix, command, args = croxy.parse_in(line)
+        self.assertEqual(prefix, "hybrid7.debian.local")
+        self.assertEqual(command, "301")
+        self.assertEqual(args, ["graham_king", "graham", "Not here"])
+
+    def test_parse_in_list(self):
+        line = ":oxygen.oftc.net 322 graham_king #linode 412 :Linode Community Support | http://www.linode.com/ | Linodes in Asia-Pacific! - http://bit.ly/ooBzhV"
+        prefix, command, args = croxy.parse_in(line)
+        self.assertEqual(prefix, "oxygen.oftc.net")
+        self.assertEqual(command, "322")
+
 
 class TestCrypto(unittest.TestCase):
     """Test the crypto methods.
@@ -83,27 +121,10 @@ class TestCrypto(unittest.TestCase):
     def test_pbkdf2(self):
         """Test croxy_pbkdf2.
         """
-        derived = b'\n\x84U\xba\x01\xca\xbf\xcbz\xf4\x8e\x01\xf5O\x93\n\x01\xc8\xb1\\-\xc2r\xaa\xef\xfb0\xae\x98\xfe8\x8f'
-        self.assertEqual(croxy.croxy_pbkdf2(self.key), derived)
-
-    def test_encrypt(self):
-        """Test croxy_encrypt.
-        """
+        derived = b'n\x9aar\x97j\xb2\\\xeb\x04K\xce\xd3lM\xd4\x97p\xd1\xe36\xfa\x1a@d,\xced\xb8\xb6\xfb\xd7'
         self.assertEqual(
-                croxy.croxy_encrypt("Test", self.key),
-                "ACZgnWZEWQVOjctD+oh3v9+LdouJhwYq23hqpS3DEHg=")
-        self.assertEqual(
-                croxy.croxy_encrypt("فُصْحَى", self.key),
-                "6eS7Z6wRWgkT2AP/OxcZBrtGsP3ThAtpIW+6fV+WjQM=")
-
-    def test_decrypt(self):
-        """Test croxy_decrypt.
-        """
-        ciphertext = "ACZgnWZEWQVOjctD+oh3v9+LdouJhwYq23hqpS3DEHg="
-        self.assertEqual(croxy.croxy_decrypt(ciphertext, self.key), "Test")
-
-        ciphertext = "6eS7Z6wRWgkT2AP/OxcZBrtGsP3ThAtpIW+6fV+WjQM="
-        self.assertEqual(croxy.croxy_decrypt(ciphertext, self.key), "فُصْحَى")
+            croxy.croxy_pbkdf2(self.key, iterations=1000, salt=b'CROXYSALT'),
+            derived)
 
     def test_not_encrypted(self):
         """Test trying to decrypt an unecrypted string.
@@ -117,16 +138,54 @@ class TestCrypto(unittest.TestCase):
     def test_roundtrip(self):
         """Test decrypt(encrypt(clear)) == clear.
         """
-        cleartext = "Björk Guðmundsdóttir"
-        ciphertext = croxy.croxy_encrypt(cleartext, self.key)
-        cleartext2 = croxy.croxy_decrypt(ciphertext, self.key)
-        self.assertEqual(cleartext, cleartext2)
+        def rt(cleartext):
+            ciphertext = croxy.croxy_encrypt(cleartext, self.key)
+            cleartext2 = croxy.croxy_decrypt(ciphertext, self.key)
+            self.assertEqual(cleartext, cleartext2)
+
+        rt("Test")
+        rt("Björk Guðmundsdóttir")
+        rt("فُصْحَى")
+
+    def test_does_something(self):
+        """Because the IV for AES is random, we can't check the exact
+        output of croxy_encrypt, so we test_roundtrip (above) to
+        makes sure it works.
+        Here we just makes sure encrypt doesn't return the cleartext.
+        """
+        self.assertTrue(croxy.croxy_encrypt('xyz', self.key) != 'xyz')
 
     def test_rijndael(self):
         """The rijndael code from tlslite has a 'test' function, so
         what the hell let's call it.
         """
         croxy.test()
+
+'''
+class TestClientHandler(unittest.TestCase):
+    """Test the ClientHandler class which
+    extends socketserver.StreamRequestHandler.
+    """
+
+    def test_init(self):
+
+        addr = ("127.0.0.1", 6667)
+        cs = croxy.ClientServer(addr, None, 'localhost', 6697, 's3cret')
+
+        h = croxy.ClientHandler(MockRequest(), addr, cs)
+        self.assertTrue(h)
+
+class MockRequest():
+
+    """Just enough of socket connection.
+    """
+    def makefile(self, mode, *args, **kwargs):
+        print(mode)
+        return open("test.txt", "ab")
+
+    def __init__(self):
+        pass
+'''
 
 
 if __name__ == '__main__':
