@@ -2,6 +2,8 @@
 
 Croxy sits between your IRC client and the IRC server, encrypting (AES-256) and decrypting all messages as they go through. People in the public channel without croxy, or with the wrong password, will see things like _3kOUXrxZzdJbqan21MpxNcycfrwylXNABtGSLyNCKWU=_ instead of your messages.
 
+[![Build Status](https://api.travis-ci.org/grahamking/croxy.png)](https://travis-ci.org/grahamking/croxy)
+
 ## Install
 
 **There is no install, you just run the script.** You must have [Python](http://www.python.org/download/releases/) v3.2+ (you probably already do).
