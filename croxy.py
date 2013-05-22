@@ -326,6 +326,9 @@ def croxy_decrypt(msg, key):
             # If it's not ascii, then it's not base64, so not encrypted
             raise NotEncrypted()
 
+    if len(msg) < 64:
+        raise NotEncrypted()
+
     try:
         sec = base64.b64decode(msg)
     except binascii.Error:

@@ -59,6 +59,23 @@ class TestServerWorker(unittest.TestCase):
 
         restore_stdout(old)
 
+    def test_handle_not_encrypted(self):
+        """Make sure not encrypted messages get clearly marked.
+        """
+
+        old = suppress_stdout()
+
+        password = "test"
+        line = ":gk!~gk@example.net PRIVMSG #sectest :test"
+        local_f = io.BytesIO()
+        croxy.handle_server_line(line, password, local_f)
+
+        output = local_f.getvalue()
+        clear = output.decode('utf8').split(":")[2].strip()
+        self.assertEqual(clear, "(I) test")
+
+        restore_stdout(old)
+
 
 class TestUtil(unittest.TestCase):
     """Test various utility functions.
@@ -151,6 +168,14 @@ class TestParse(unittest.TestCase):
         prefix, command, args = croxy.parse_in(line)
         self.assertEqual(prefix, "oxygen.oftc.net")
         self.assertEqual(command, "322")
+
+    def test_parse_in_url(self):
+        line = ":bob!~bob@example.com PRIVMSG #test :https://botbot.me"
+        prefix, command, args = croxy.parse_in(line)
+        self.assertEqual(prefix, "bob!~bob@example.com")
+        self.assertEqual(command, "PRIVMSG")
+        self.assertEqual(args, ["#test", "https://botbot.me"])
+
 
 
 class TestCrypto(unittest.TestCase):
