@@ -75,7 +75,7 @@ its author.
 
 Code from Django Software Federation (pbkdf2) is BSD licensed.
 
-All other code in Croxy is (c) 2013 Graham King, released into the public domain.
+All other code in Croxy is (c) 2013-2015 Graham King, released into the public domain. See LICENSE file.
 
 ### Testing
 
