@@ -28,12 +28,14 @@ import base64
 import binascii
 import ssl
 import os
+import secrets
 
 USAGE = "Usage: croxy <irc.example.net> [port]\nDefault port is 6697"
 LISTEN_PORT = 6667
 REMOTE_PORT = 6697  # Default IRC over TLS port
 
-DEFAULT_SALT = b"CROXYSALT IS A LOW SODIUM SALT"    # For pbkdf2 only
+salt = secrets.token_hex(50)
+DEFAULT_SALT = salt.encode("utf-8")    # For pbkdf2 only
 PBKDF2_ITERATIONS = 5000
 
 def main(args):
