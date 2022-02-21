@@ -1,5 +1,3 @@
-**WARNING**: Currently the salt that croxy uses is hard-coded. This reduces the safety of the encryption. Contributions welcome :-)
-
 # Croxy: Encrypting IRC proxy
 
 Croxy sits between your IRC client and the IRC server, encrypting (AES-256) and decrypting all messages as they go through. People in the public channel without croxy, or with the wrong password, will see things like _3kOUXrxZzdJbqan21MpxNcycfrwylXNABtGSLyNCKWU=_ instead of your messages.
